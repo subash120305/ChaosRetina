@@ -1,0 +1,271 @@
+# =============================================================================
+# RIADD Modern - Configuration File
+# =============================================================================
+# Central configuration for the entire pipeline.
+# Modify paths and hyperparameters here - no hardcoded values in code.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Paths Configuration
+# -----------------------------------------------------------------------------
+paths:
+  # Dataset directory - contains Training_Set, Validation_Set, Test_Set folders
+  data_dir: "./dataset"
+  
+  # Output directories
+  output_dir: "./outputs"
+  models_dir: "./outputs/models"
+  logs_dir: "./outputs/logs"
+  predictions_dir: "./outputs/predictions"
+  
+# -----------------------------------------------------------------------------
+# Dataset Configuration
+# -----------------------------------------------------------------------------
+dataset:
+  # Image settings
+  image_size: 224  # Square images: 224x224
+  image_channels: 3
+  
+  # Dataset structure (matching your folder structure)
+  train_folder: "Training_Set"
+  val_folder: "Validation_Set"
+  test_folder: "Test_Set"
+  
+  # CSV column names (adjust if your CSVs have different names)
+  image_id_column: "ID"
+  
+  # Disease classes (28 diseases + Disease_Risk = 29 total)
+  # Disease_Risk is binary: 0 = healthy, 1 = has some disease
+  disease_risk_column: "Disease_Risk"
+  
+  disease_columns:
+    - "DR"      # Diabetic Retinopathy
+    - "ARMD"    # Age-related Macular Degeneration
+    - "MH"      # Media Haze
+    - "DN"      # Drusen
+    - "MYA"     # Myopia
+    - "BRVO"    # Branch Retinal Vein Occlusion
+    - "TSLN"    # Tessellation
+    - "ERM"     # Epiretinal Membrane
+    - "LS"      # Laser Scar
+    - "MS"      # Macular Scar
+    - "CSR"     # Central Serous Retinopathy
+    - "ODC"     # Optic Disc Cupping
+    - "CRVO"    # Central Retinal Vein Occlusion
+    - "TV"      # Tortuous Vessels
+    - "AH"      # Asteroid Hyalosis
+    - "ODP"     # Optic Disc Pallor
+    - "ODE"     # Optic Disc Edema
+    - "ST"      # Shunt
+    - "AION"    # Anterior Ischemic Optic Neuropathy
+    - "PT"      # Parafoveal Telangiectasia
+    - "RT"      # Retinal Traction
+    - "RS"      # Retinitis
+    - "CRS"     # Chorioretinitis
+    - "EDN"     # Exudation
+    - "RPEC"    # Retinal Pigment Epithelium Changes
+    - "MHL"     # Macular Hole
+    - "RP"      # Retinitis Pigmentosa
+    - "OTHER"   # Other conditions
+
+# -----------------------------------------------------------------------------
+# Training Configuration
+# -----------------------------------------------------------------------------
+training:
+  # Batch size - optimized for GTX 1650 4GB
+  # Start small to avoid OOM, can increase if memory allows
+  batch_size: 8
+  
+  # Gradient accumulation to simulate larger batch sizes
+  # Effective batch size = batch_size * accumulation_steps = 8 * 4 = 32
+  accumulation_steps: 4
+  
+  # Training epochs
+  epochs: 100
+  
+  # Learning rate
+  learning_rate: 0.0001
+  weight_decay: 0.01
+  
+  # Learning rate scheduler
+  scheduler: "cosine"  # Options: cosine, step, plateau
+  warmup_epochs: 5
+  
+  # Cross-validation
+  num_folds: 5
+  
+  # Early stopping
+  early_stopping_patience: 15
+  early_stopping_min_delta: 0.001
+  
+  # Mixed precision training (saves GPU memory)
+  use_amp: true
+  
+  # Number of dataloader workers
+  # Keep low on Windows to avoid multiprocessing issues
+  num_workers: 2
+  
+  # Pin memory for faster GPU transfer
+  pin_memory: true
+  
+  # Random seed for reproducibility
+  seed: 42
+
+# -----------------------------------------------------------------------------
+# Model Architectures
+# -----------------------------------------------------------------------------
+# Using smaller/efficient models suitable for GTX 1650 4GB
+architectures:
+  # Classifiers for multi-label disease detection
+  classifiers:
+    - "efficientnet_b0"      # Smallest EfficientNet, very GPU friendly
+    - "densenet121"          # Smaller DenseNet
+    - "resnet50"             # Classic, well-tested
+  
+  # Detectors for binary disease risk
+  detectors:
+    - "efficientnet_b0"
+    - "densenet121"
+  
+  # Default backbone for single model training
+  default_backbone: "efficientnet_b0"
+
+# -----------------------------------------------------------------------------
+# Loss Function Configuration
+# -----------------------------------------------------------------------------
+loss:
+  # Loss type: asymmetric, focal, bce
+  # Asymmetric loss is best for multi-label imbalanced data
+  classifier_loss: "asymmetric"
+  detector_loss: "focal"
+  
+  # Asymmetric loss parameters
+  asymmetric:
+    gamma_neg: 4    # Down-weight easy negatives
+    gamma_pos: 1    # Focus on hard positives
+    clip: 0.05      # Probability clipping
+  
+  # Focal loss parameters
+  focal:
+    alpha: 0.25
+    gamma: 2.0
+  
+  # Label smoothing (helps prevent overconfidence)
+  label_smoothing: 0.1
+
+# -----------------------------------------------------------------------------
+# Regularization (Anti-Overfitting)
+# -----------------------------------------------------------------------------
+regularization:
+  # Dropout in classification head
+  dropout: 0.4
+  
+  # Data augmentation strength
+  augmentation_strength: "medium"  # Options: light, medium, strong
+  
+  # Mixup augmentation (interpolates between samples)
+  use_mixup: true
+  mixup_alpha: 0.2
+  
+  # CutMix augmentation
+  use_cutmix: true
+  cutmix_alpha: 1.0
+  
+  # Probability of applying mixup/cutmix per batch
+  mix_probability: 0.5
+
+# -----------------------------------------------------------------------------
+# Ensemble Configuration
+# -----------------------------------------------------------------------------
+ensemble:
+  # Method: stacking (train meta-learner) or averaging (simple mean)
+  method: "stacking"
+  
+  # Meta-learner for stacking
+  meta_learner: "logistic_regression"  # Options: logistic_regression, random_forest
+  
+  # Class balancing for meta-learner
+  balanced: true
+
+# -----------------------------------------------------------------------------
+# Inference Configuration
+# -----------------------------------------------------------------------------
+inference:
+  # Test-time augmentation (CRITICAL for better predictions)
+  use_tta: true
+  tta_mode: "light"  # Options: full (8 transforms), light (4 transforms), none
+  
+  # Per-class optimal thresholds (CRITICAL for imbalanced data)
+  use_optimal_thresholds: true
+  threshold_method: "f1"  # Options: f1, youden, precision, recall
+  
+  # Default threshold (used if optimal not available)
+  default_threshold: 0.5
+  
+  # Confidence levels for reporting
+  high_confidence: 0.8
+  moderate_confidence: 0.6
+  low_confidence: 0.4
+
+# -----------------------------------------------------------------------------
+# ChaosFEX Configuration (ENABLED BY DEFAULT)
+# -----------------------------------------------------------------------------
+chaosfex:
+  # Enable/disable ChaosFEX hybrid models
+  enabled: true
+  
+  # Number of chaotic neurons
+  n_neurons: 100
+  
+  # Chaotic map type: GLS, Logistic, Hybrid
+  map_type: "GLS"
+  
+  # GLS map parameters
+  b: 0.1
+  
+  # Logistic map parameter (for map_type=Logistic)
+  r: 3.8
+  
+  # Chaotic iteration parameters
+  max_iterations: 500
+  threshold: 0.5
+  
+  # Fusion method for hybrid model: concat, add, attention
+  fusion: "concat"
+  
+  # Use multi-scale ChaosFEX (captures dynamics at multiple scales)
+  multi_scale: false
+  n_scales: 3
+
+# -----------------------------------------------------------------------------
+# Logging & Experiment Tracking
+# -----------------------------------------------------------------------------
+logging:
+  # Console logging level
+  level: "INFO"
+  
+  # Save training logs
+  save_logs: true
+  
+  # Weights & Biases integration
+  wandb:
+    enabled: true
+    project: "riadd-modern"
+    entity: null  # Your W&B username, or null for default
+
+# -----------------------------------------------------------------------------
+# Evaluation Configuration
+# -----------------------------------------------------------------------------
+evaluation:
+  # Metrics to compute
+  metrics:
+    - "auroc"
+    - "auprc"
+    - "f1"
+    - "precision"
+    - "recall"
+  
+  # Generate plots
+  generate_plots: true
+  plot_format: "png"
+  plot_dpi: 150
