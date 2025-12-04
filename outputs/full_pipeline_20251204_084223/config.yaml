@@ -1,0 +1,130 @@
+architectures:
+  classifiers:
+  - efficientnet_b0
+  - densenet121
+  default_backbone: efficientnet_b0
+  detectors:
+  - efficientnet_b0
+  - densenet121
+chaosfex:
+  b: 0.1
+  enabled: true
+  fusion: concat
+  map_type: GLS
+  max_iterations: 500
+  multi_scale: false
+  n_neurons: 100
+  n_scales: 3
+  r: 3.8
+  threshold: 0.5
+dataset:
+  disease_columns:
+  - DR
+  - ARMD
+  - MH
+  - DN
+  - MYA
+  - BRVO
+  - TSLN
+  - ERM
+  - LS
+  - MS
+  - CSR
+  - ODC
+  - CRVO
+  - TV
+  - AH
+  - ODP
+  - ODE
+  - ST
+  - AION
+  - PT
+  - RT
+  - RS
+  - CRS
+  - EDN
+  - RPEC
+  - MHL
+  - RP
+  disease_risk_column: Disease_Risk
+  image_channels: 3
+  image_id_column: ID
+  image_size: 224
+  test_folder: Test_Set
+  train_folder: Training_Set
+  val_folder: Validation_Set
+ensemble:
+  balanced: true
+  meta_learner: logistic_regression
+  method: stacking
+evaluation:
+  generate_plots: true
+  metrics:
+  - auroc
+  - auprc
+  - f1
+  - precision
+  - recall
+  plot_dpi: 150
+  plot_format: png
+inference:
+  default_threshold: 0.5
+  high_confidence: 0.8
+  low_confidence: 0.4
+  moderate_confidence: 0.6
+  threshold_method: f1
+  tta_mode: light
+  use_optimal_thresholds: true
+  use_tta: true
+logging:
+  level: INFO
+  save_logs: true
+  wandb:
+    enabled: true
+    entity: null
+    project: riadd-modern
+loss:
+  asymmetric:
+    clip: 0.05
+    gamma_neg: 4
+    gamma_pos: 1
+  classifier_loss: bce
+  detector_loss: focal
+  focal:
+    alpha: 0.25
+    gamma: 2.0
+  label_smoothing: 0.1
+paths:
+  logs_dir: ./outputs/logs
+  models_dir: ./outputs/models
+  output_dir: ./outputs
+  predictions_dir: ./outputs/predictions
+  test_images: ./dataset/Test_Set/Test_Set/Test
+  test_labels: ./dataset/Test_Set/Test_Set/RFMiD_Testing_Labels.csv
+  train_images: ./dataset/Training_Set/Training_Set/Training
+  train_labels: ./dataset/Training_Set/Training_Set/RFMiD_Training_Labels.csv
+  val_images: ./dataset/Evaluation_Set/Evaluation_Set/Validation
+  val_labels: ./dataset/Evaluation_Set/Evaluation_Set/RFMiD_Validation_Labels.csv
+regularization:
+  augmentation_strength: medium
+  cutmix_alpha: 1.0
+  dropout: 0.4
+  mix_probability: 0.5
+  mixup_alpha: 0.2
+  use_cutmix: true
+  use_mixup: true
+training:
+  accumulation_steps: 4
+  batch_size: 8
+  early_stopping_min_delta: 0.001
+  early_stopping_patience: 15
+  epochs: 50
+  learning_rate: 0.0003
+  num_folds: 5
+  num_workers: 2
+  pin_memory: true
+  scheduler: cosine
+  seed: 42
+  use_amp: true
+  warmup_epochs: 5
+  weight_decay: 0.01

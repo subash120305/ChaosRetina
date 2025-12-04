@@ -54,8 +54,8 @@ def run_classifier_training(config: dict, output_dir: Path, args) -> dict:
     print("="*70)
     
     device = setup_device()
-    architectures = config.get('training', {}).get('architectures', ['efficientnet_b0'])
-    num_folds = 1 if args.quick else config.get('training', {}).get('num_folds', 5)
+    architectures = config.get('architectures', {}).get('classifiers', ['efficientnet_b0'])
+    num_folds = 2 if args.quick else config.get('training', {}).get('num_folds', 5)
     
     if args.quick:
         architectures = architectures[:1]  # Only first architecture
@@ -71,7 +71,7 @@ def run_classifier_training(config: dict, output_dir: Path, args) -> dict:
         class MockArgs:
             architecture = arch
             folds = num_folds
-            epochs = 5 if args.quick else None
+            epochs = 1 if args.quick else None
             batch_size = None
             lr = None
             use_chaosfex = args.use_chaosfex
@@ -91,7 +91,7 @@ def run_classifier_training(config: dict, output_dir: Path, args) -> dict:
                 result = train_fold(fold, config, mock_args, device, arch_dir)
                 fold_results.append(result)
             except Exception as e:
-                print(f"⚠️  Fold {fold} failed: {e}")
+                print(f"[WARN] Fold {fold} failed: {e}")
                 continue
         
         if fold_results:
@@ -115,8 +115,8 @@ def run_detector_training(config: dict, output_dir: Path, args) -> dict:
     from scripts.train_detector import train_detector_fold
     
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    architectures = config.get('training', {}).get('architectures', ['efficientnet_b0'])
-    num_folds = 1 if args.quick else 3  # Fewer folds for detector
+    architectures = config.get('architectures', {}).get('detectors', ['efficientnet_b0'])
+    num_folds = 2 if args.quick else 3  # Fewer folds for detector
     
     if args.quick:
         architectures = architectures[:1]
@@ -130,7 +130,7 @@ def run_detector_training(config: dict, output_dir: Path, args) -> dict:
             architecture = arch
             batch_size = 16
             lr = 1e-4
-            epochs = 3 if args.quick else 20
+            epochs = 1 if args.quick else 20
             config = 'config/config.yaml'
             no_wandb = args.no_wandb
         
@@ -144,7 +144,7 @@ def run_detector_training(config: dict, output_dir: Path, args) -> dict:
                 result = train_detector_fold(fold, num_folds, config, mock_args, device, det_dir)
                 fold_results.append(result)
             except Exception as e:
-                print(f"⚠️  Detector fold {fold} failed: {e}")
+                print(f"[WARN] Detector fold {fold} failed: {e}")
         
         if fold_results:
             losses = [r['best_val_loss'] for r in fold_results]
@@ -169,7 +169,7 @@ def create_ensemble_config(classifier_results: dict, output_dir: Path):
         reverse=True
     )
     
-    print("\n📊 Model Performance Ranking:")
+    print("\n[RESULTS] Model Performance Ranking:")
     for i, (arch, metrics) in enumerate(sorted_archs):
         print(f"  {i+1}. {arch}: AUC = {metrics['mean_auc']:.4f} ± {metrics['std_auc']:.4f}")
     
@@ -195,7 +195,7 @@ def create_ensemble_config(classifier_results: dict, output_dir: Path):
     with open(ensemble_path, 'w') as f:
         yaml.dump(ensemble_config, f)
     
-    print(f"\n📁 Ensemble config saved to {ensemble_path}")
+    print(f"\n[INFO] Ensemble config saved to {ensemble_path}")
     
     return ensemble_config
 
@@ -239,7 +239,7 @@ def generate_final_report(
         f.write("2. Run ensemble predictions on test set\n")
         f.write("3. Generate submission file for evaluation\n")
     
-    print(f"\n📄 Report saved to {report_path}")
+    print(f"\n[INFO] Report saved to {report_path}")
 
 
 def main():
@@ -250,7 +250,7 @@ def main():
     print("="*70)
     
     if args.quick:
-        print("⚡ Quick mode enabled - reduced training for testing")
+        print(">> Quick mode enabled - reduced training for testing")
     
     # Load config
     with open(args.config, 'r') as f:
@@ -262,7 +262,7 @@ def main():
                  Path('outputs') / f'full_pipeline_{timestamp}'
     output_dir.mkdir(parents=True, exist_ok=True)
     
-    print(f"\n📁 Output directory: {output_dir}")
+    print(f"\n[INFO] Output directory: {output_dir}")
     
     # Save config
     with open(output_dir / 'config.yaml', 'w') as f:
@@ -272,7 +272,7 @@ def main():
     try:
         classifier_results = run_classifier_training(config, output_dir, args)
     except Exception as e:
-        print(f"❌ Classifier training failed: {e}")
+        print(f"[ERROR] Classifier training failed: {e}")
         classifier_results = {}
     
     # Phase 2: Detectors
@@ -281,20 +281,20 @@ def main():
         try:
             detector_results = run_detector_training(config, output_dir, args)
         except Exception as e:
-            print(f"❌ Detector training failed: {e}")
+            print(f"[ERROR] Detector training failed: {e}")
     
     # Phase 3: Ensemble
     if classifier_results:
         try:
             create_ensemble_config(classifier_results, output_dir)
         except Exception as e:
-            print(f"⚠️  Ensemble config failed: {e}")
+            print(f"[WARN] Ensemble config failed: {e}")
     
     # Generate report
     generate_final_report(classifier_results, detector_results, output_dir, args)
     
     print("\n" + "="*70)
-    print("✅ PIPELINE COMPLETE")
+    print("[DONE] PIPELINE COMPLETE")
     print("="*70)
     print(f"\nAll outputs saved to: {output_dir}")
 

@@ -1,0 +1,7 @@
+BINARY DETECTOR METRICS
+=======================
+Accuracy:  0.8953
+Precision: 0.9700
+Recall:    0.8953
+F1-Score:  0.9311
+AUROC:     0.9572

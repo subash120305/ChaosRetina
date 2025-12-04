@@ -1,64 +1,20 @@
-# Python
+# Datasets (Keep ignored)
+dataset/
+data/Training_Set/
+data/Validation_Set/
+data/Test_Set/
+
+# Python cache
 __pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
+*.pyc
+*.pyo
+*.pyd
 
-# Virtual environments
-venv/
-ENV/
-env/
-.venv/
-
-# IDE
-.idea/
+# IDE settings
 .vscode/
+.idea/
 *.swp
-*.swo
-*~
 
-# Jupyter
-.ipynb_checkpoints/
-*.ipynb_checkpoints
-
-# Model files (large files)
-*.pt
-*.pth
-*.h5
-*.hdf5
-*.pkl
-*.pickle
-outputs/
-checkpoints/
-models/*.pt
-models/*.pth
-
-# Logs
-logs/
-*.log
-wandb/
-
-# OS
+# System
 .DS_Store
 Thumbs.db
-
-# Temporary files
-*.tmp
-*.temp
-.cache/

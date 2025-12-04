@@ -1,5 +1,5 @@
 # =============================================================================
-# RIADD Modern - Configuration File
+# ChaosRetina - Configuration File
 # =============================================================================
 # Central configuration for the entire pipeline.
 # Modify paths and hyperparameters here - no hardcoded values in code.
@@ -10,7 +10,15 @@
 # -----------------------------------------------------------------------------
 paths:
   # Dataset directory - contains Training_Set, Validation_Set, Test_Set folders
-  data_dir: "./dataset"
+  # Using explicit paths for nested structure
+  train_labels: "./dataset/Training_Set/Training_Set/RFMiD_Training_Labels.csv"
+  train_images: "./dataset/Training_Set/Training_Set/Training"
+  
+  val_labels: "./dataset/Evaluation_Set/Evaluation_Set/RFMiD_Validation_Labels.csv"
+  val_images: "./dataset/Evaluation_Set/Evaluation_Set/Validation"
+  
+  test_labels: "./dataset/Test_Set/Test_Set/RFMiD_Testing_Labels.csv"
+  test_images: "./dataset/Test_Set/Test_Set/Test"
   
   # Output directories
   output_dir: "./outputs"
@@ -66,13 +74,12 @@ dataset:
     - "RPEC"    # Retinal Pigment Epithelium Changes
     - "MHL"     # Macular Hole
     - "RP"      # Retinitis Pigmentosa
-    - "OTHER"   # Other conditions
 
 # -----------------------------------------------------------------------------
 # Training Configuration
 # -----------------------------------------------------------------------------
 training:
-  # Batch size - optimized for GTX 1650 4GB
+  # Batch size - optimized for GTX 1650/RTX 3050 4GB
   # Start small to avoid OOM, can increase if memory allows
   batch_size: 8
   
@@ -81,10 +88,10 @@ training:
   accumulation_steps: 4
   
   # Training epochs
-  epochs: 100
+  epochs: 50
   
   # Learning rate
-  learning_rate: 0.0001
+  learning_rate: 0.0003
   weight_decay: 0.01
   
   # Learning rate scheduler
@@ -92,7 +99,7 @@ training:
   warmup_epochs: 5
   
   # Cross-validation
-  num_folds: 5
+  num_folds: 1
   
   # Early stopping
   early_stopping_patience: 15
@@ -114,13 +121,14 @@ training:
 # -----------------------------------------------------------------------------
 # Model Architectures
 # -----------------------------------------------------------------------------
-# Using smaller/efficient models suitable for GTX 1650 4GB
+# Using smaller/efficient models suitable for GTX 1650/RTX 3050 4GB
 architectures:
   # Classifiers for multi-label disease detection
   classifiers:
     - "efficientnet_b0"      # Smallest EfficientNet, very GPU friendly
     - "densenet121"          # Smaller DenseNet
-    - "resnet50"             # Classic, well-tested
+    # - "resnet50"           # Removed to save memory on 4GB GPU
+
   
   # Detectors for binary disease risk
   detectors:
@@ -136,7 +144,7 @@ architectures:
 loss:
   # Loss type: asymmetric, focal, bce
   # Asymmetric loss is best for multi-label imbalanced data
-  classifier_loss: "asymmetric"
+  classifier_loss: "bce"
   detector_loss: "focal"
   
   # Asymmetric loss parameters

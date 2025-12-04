@@ -212,3 +212,21 @@ def create_backbone_with_features(name: str, pretrained: bool = True):
     model = timm.create_model(name, pretrained=pretrained, num_classes=0)
     model.num_features = model.num_features
     return model
+
+
+def get_regularized_classifier(
+    backbone_name: str,
+    num_classes: int = 28,
+    dropout: float = 0.4,
+    pretrained: bool = True
+) -> MultiLabelClassifier:
+    """
+    Factory function to create a regularized classifier.
+    Matches the signature expected by train_classifiers.py
+    """
+    return MultiLabelClassifier(
+        backbone_name=backbone_name,
+        num_classes=num_classes,
+        pretrained=pretrained,
+        dropout=dropout
+    )

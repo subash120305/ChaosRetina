@@ -30,8 +30,9 @@ from data.augmentation import get_train_transforms, get_val_transforms
 from data.preprocessing import RetinalPreprocessor
 from models.classifier import MultiLabelClassifier, get_regularized_classifier
 from models.chaosfex import HybridCNNChaosFEX, create_hybrid_classifier
+from models.chaosfex import HybridCNNChaosFEX, create_hybrid_classifier
 from models.losses import get_loss_function
-from training.trainer import Trainer
+from training.trainer import Trainer, create_optimizer, create_scheduler
 from evaluation.evaluate import Evaluator
 
 
@@ -92,11 +93,11 @@ def setup_device():
     """Setup compute device"""
     if torch.cuda.is_available():
         device = torch.device('cuda')
-        print(f"🖥️  Using GPU: {torch.cuda.get_device_name(0)}")
-        print(f"   Memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.1f} GB")
+        print("[GPU] Using GPU: {torch.cuda.get_device_name(0)}")
+        print(f"      Memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.1f} GB")
     else:
         device = torch.device('cpu')
-        print("⚠️  No GPU available, using CPU")
+        print("[CPU] No GPU available, using CPU")
     return device
 
 
@@ -106,7 +107,7 @@ def create_model(config: dict, args, num_classes: int = 28) -> nn.Module:
     architecture = args.architecture or config.get('architecture', 'efficientnet_b0')
     
     if args.use_chaosfex:
-        print(f"🔮 Creating Hybrid CNN-ChaosFEX model with {args.chaos_neurons} neurons")
+        print(f"[MODEL] Creating Hybrid CNN-ChaosFEX model with {args.chaos_neurons} neurons")
         
         chaos_config = {
             'architecture': architecture,
@@ -123,7 +124,7 @@ def create_model(config: dict, args, num_classes: int = 28) -> nn.Module:
         
         model = create_hybrid_classifier(chaos_config, num_classes=num_classes)
     else:
-        print(f"🏗️  Creating classifier with {architecture} backbone")
+        print(f"[MODEL] Creating classifier with {architecture} backbone")
         model = get_regularized_classifier(
             backbone_name=architecture,
             num_classes=num_classes,
@@ -161,52 +162,62 @@ def train_fold(
         num_workers=num_workers,
         fold=fold,
         num_folds=args.folds or training_config.get('num_folds', 5),
-        task='multilabel'
+        task='multilabel',
+        config=config
     )
     
-    print(f"📊 Training samples: {len(train_loader.dataset)}")
-    print(f"📊 Validation samples: {len(val_loader.dataset)}")
+    print(f"[DATA] Training samples: {len(train_loader.dataset)}")
+    print(f"[DATA] Validation samples: {len(val_loader.dataset)}")
     
     # Create model
-    model = create_model(config, args, num_classes=28)
+    num_classes = len(train_loader.dataset.disease_columns)
+    print(f"[INFO] Number of classes: {num_classes}")
+    model = create_model(config, args, num_classes=num_classes)
     model = model.to(device)
     
     # Count parameters
     total_params = sum(p.numel() for p in model.parameters())
     trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    print(f"📐 Total parameters: {total_params:,}")
-    print(f"📐 Trainable parameters: {trainable_params:,}")
+    print(f"[INFO] Total parameters: {total_params:,}")
+    print(f"[INFO] Trainable parameters: {trainable_params:,}")
     
-    # Create trainer
-    epochs = args.epochs or training_config.get('epochs', 50)
-    lr = args.lr or training_config.get('learning_rate', 1e-4)
+    # Create optimizer and scheduler
+    optimizer = create_optimizer(model, config)
     
+    steps_per_epoch = len(train_loader) // training_config.get('accumulation_steps', 1)
+    scheduler = create_scheduler(optimizer, config, steps_per_epoch)
+    
+    # Get loss function
+    criterion = get_loss_function(config)
+    
+    # Update config with correct output directory
+    fold_config = config.copy()
+    fold_config['paths'] = config.get('paths', {}).copy()
+    fold_config['paths']['output_dir'] = str(output_dir)
+
     trainer = Trainer(
         model=model,
+        train_loader=train_loader,
+        val_loader=val_loader,
+        criterion=criterion,
+        optimizer=optimizer,
+        config=fold_config,
         device=device,
-        loss_fn=args.loss,
-        learning_rate=lr,
-        weight_decay=training_config.get('weight_decay', 1e-5),
-        scheduler_type=training_config.get('scheduler', 'cosine'),
-        early_stopping_patience=training_config.get('early_stopping_patience', 10),
-        use_amp=training_config.get('use_amp', True),
-        use_wandb=not args.no_wandb and config.get('wandb', {}).get('enabled', False),
-        wandb_project=config.get('wandb', {}).get('project', 'riadd-modern'),
-        wandb_run_name=f"{args.experiment_name or 'classifier'}_fold{fold}"
+        scheduler=scheduler,
+        experiment_name=f"fold_{fold}"
     )
     
     # Train
     fold_output = output_dir / f'fold_{fold}'
     
+    epochs = args.epochs or training_config.get('epochs', 50)
+    
     history = trainer.fit(
-        train_loader=train_loader,
-        val_loader=val_loader,
-        epochs=epochs,
-        save_dir=str(fold_output)
+        epochs=epochs
     )
     
     # Evaluate best model
-    best_model_path = fold_output / 'best_model.pt'
+    best_model_path = fold_output / 'models' / 'best_model.pth'
     if best_model_path.exists():
         model.load_state_dict(torch.load(best_model_path, weights_only=True))
     
@@ -236,7 +247,7 @@ def main():
     
     # Load config
     config = load_config(args.config)
-    print(f"📁 Loaded config from {args.config}")
+    print(f"[INFO] Loaded config from {args.config}")
     
     # Setup
     device = setup_device()
@@ -252,7 +263,7 @@ def main():
         output_dir = output_dir / f'classifier_{architecture}_{timestamp}'
     
     output_dir.mkdir(parents=True, exist_ok=True)
-    print(f"📁 Output directory: {output_dir}")
+    print(f"[INFO] Output directory: {output_dir}")
     
     # Save config
     with open(output_dir / 'config.yaml', 'w') as f:
@@ -266,7 +277,7 @@ def main():
         fold_results = train_fold(fold, config, args, device, output_dir)
         all_results.append(fold_results)
         
-        print(f"\n✅ Fold {fold + 1} complete - Best AUC: {fold_results['best_auc']:.4f}")
+        print(f"\n[DONE] Fold {fold + 1} complete - Best AUC: {fold_results['best_auc']:.4f}")
     
     # Summary
     aucs = [r['best_auc'] for r in all_results]
@@ -274,7 +285,7 @@ def main():
     print("\n" + "="*60)
     print("TRAINING COMPLETE")
     print("="*60)
-    print(f"\n📊 Cross-validation Results ({num_folds} folds):")
+    print(f"\n[RESULTS] Cross-validation Results ({num_folds} folds):")
     print(f"   Mean AUC: {np.mean(aucs):.4f} ± {np.std(aucs):.4f}")
     print(f"   Best fold: {np.argmax(aucs) + 1} (AUC: {np.max(aucs):.4f})")
     
@@ -291,7 +302,7 @@ def main():
     with open(output_dir / 'summary.yaml', 'w') as f:
         yaml.dump(summary, f)
     
-    print(f"\n📁 Results saved to {output_dir}")
+    print(f"\n[INFO] Results saved to {output_dir}")
 
 
 if __name__ == '__main__':

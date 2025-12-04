@@ -26,7 +26,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from data.dataset import RFMiDDataset, get_dataloaders
 from models.detector import DiseaseDetector
-from training.trainer import Trainer
+from training.trainer import Trainer, create_optimizer, create_scheduler
 from evaluation.metrics import compute_metrics
 
 
@@ -80,7 +80,7 @@ def train_detector_fold(
         task='binary'  # Only Disease_Risk
     )
     
-    print(f"📊 Training: {len(train_loader.dataset)} | Validation: {len(val_loader.dataset)}")
+    print(f"[DATA] Training: {len(train_loader.dataset)} | Validation: {len(val_loader.dataset)}")
     
     # Model
     model = DiseaseDetector(
@@ -89,25 +89,35 @@ def train_detector_fold(
     )
     model = model.to(device)
     
+    # Create optimizer and scheduler
+    optimizer = create_optimizer(model, config)
+    
+    # Calculate steps per epoch for scheduler
+    steps_per_epoch = len(train_loader) // config.get('training', {}).get('accumulation_steps', 1)
+    scheduler = create_scheduler(optimizer, config, steps_per_epoch)
+    
+    # Update config with correct output directory for this run
+    fold_config = config.copy()
+    fold_config['paths'] = config.get('paths', {}).copy()
+    fold_config['paths']['output_dir'] = str(output_dir)
+
     # Trainer with BCE loss for binary
     trainer = Trainer(
         model=model,
+        train_loader=train_loader,
+        val_loader=val_loader,
+        criterion=nn.CrossEntropyLoss(),
+        optimizer=optimizer,
+        config=fold_config,
         device=device,
-        loss_fn='bce',
-        learning_rate=args.lr,
-        scheduler_type='cosine',
-        early_stopping_patience=7,
-        use_amp=True,
-        use_wandb=not args.no_wandb
+        scheduler=scheduler,
+        experiment_name=f"fold_{fold}"
     )
     
     fold_dir = output_dir / f'fold_{fold}'
     
     history = trainer.fit(
-        train_loader=train_loader,
-        val_loader=val_loader,
-        epochs=args.epochs,
-        save_dir=str(fold_dir)
+        epochs=args.epochs
     )
     
     # Get best validation metrics
@@ -133,7 +143,7 @@ def main():
     
     # Device
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    print(f"🖥️  Device: {device}")
+    print(f"[INFO] Device: {device}")
     
     # Output
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -153,7 +163,7 @@ def main():
     print("\n" + "="*60)
     print("DETECTOR TRAINING COMPLETE")
     print("="*60)
-    print(f"📊 Mean Val Loss: {np.mean(losses):.4f} ± {np.std(losses):.4f}")
+    print(f"[RESULTS] Mean Val Loss: {np.mean(losses):.4f} ± {np.std(losses):.4f}")
     
     # Save summary
     summary = {

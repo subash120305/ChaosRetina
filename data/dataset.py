@@ -18,6 +18,8 @@ import numpy as np
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Union, Callable
 from PIL import Image
+from sklearn.model_selection import KFold
+
 
 import torch
 from torch.utils.data import Dataset, DataLoader
@@ -58,7 +60,9 @@ class RFMiDDataset(Dataset):
         image_extensions: Tuple[str, ...] = (".png", ".jpg", ".jpeg", ".tif", ".tiff"),
         apply_retinal_preprocessing: bool = True,
         target_size: int = 224,
+        dataframe: Optional[pd.DataFrame] = None
     ):
+
         """
         Args:
             csv_path: Path to CSV file with labels
@@ -71,8 +75,9 @@ class RFMiDDataset(Dataset):
             image_extensions: Valid image file extensions
             apply_retinal_preprocessing: Whether to apply retinal-specific crops
             target_size: Target image size for preprocessing
+            dataframe: Optional pandas DataFrame (overrides csv_path)
         """
-        self.csv_path = Path(csv_path)
+        self.csv_path = Path(csv_path) if csv_path else None
         self.image_dir = Path(image_dir)
         self.mode = mode
         self.transform = transform
@@ -80,6 +85,7 @@ class RFMiDDataset(Dataset):
         self.disease_risk_column = disease_risk_column
         self.image_extensions = image_extensions
         self.apply_retinal_preprocessing = apply_retinal_preprocessing
+        self.dataframe = dataframe
         
         # Default disease columns if not provided
         if disease_columns is None:
@@ -87,7 +93,7 @@ class RFMiDDataset(Dataset):
                 "DR", "ARMD", "MH", "DN", "MYA", "BRVO", "TSLN", "ERM",
                 "LS", "MS", "CSR", "ODC", "CRVO", "TV", "AH", "ODP",
                 "ODE", "ST", "AION", "PT", "RT", "RS", "CRS", "EDN",
-                "RPEC", "MHL", "RP", "OTHER"
+                "RPEC", "MHL", "RP"
             ]
         else:
             self.disease_columns = disease_columns
@@ -103,11 +109,13 @@ class RFMiDDataset(Dataset):
     
     def _load_data(self) -> None:
         """Load CSV and validate image files exist."""
-        # Load CSV
-        if not self.csv_path.exists():
+        # Load CSV or DataFrame
+        if self.dataframe is not None:
+            self.df = self.dataframe.copy()
+        elif self.csv_path and self.csv_path.exists():
+            self.df = pd.read_csv(self.csv_path)
+        else:
             raise FileNotFoundError(f"CSV file not found: {self.csv_path}")
-        
-        self.df = pd.read_csv(self.csv_path)
         
         # Validate required columns
         if self.image_id_column not in self.df.columns:
@@ -158,7 +166,8 @@ class RFMiDDataset(Dataset):
             raise RuntimeError(f"No valid image-label pairs found! "
                              f"Check image_dir: {self.image_dir}")
         
-        print(f"Loaded {len(self.samples)} samples from {self.csv_path.name}")
+        source_name = self.csv_path.name if self.csv_path else "DataFrame"
+        print(f"Loaded {len(self.samples)} samples from {source_name}")
     
     def _find_image(self, image_id: str) -> Optional[Path]:
         """Find image file for given ID, trying various extensions."""
@@ -245,45 +254,85 @@ class RFMiDDataset(Dataset):
 
 
 def get_dataloaders(
-    config: Dict,
-    train_csv: Union[str, Path],
-    train_image_dir: Union[str, Path],
-    val_csv: Optional[Union[str, Path]] = None,
-    val_image_dir: Optional[Union[str, Path]] = None,
-    mode: str = "multilabel"
+    csv_path: Union[str, Path],
+    images_dir: Union[str, Path],
+    batch_size: int,
+    num_workers: int,
+    fold: Optional[int] = None,
+    num_folds: Optional[int] = None,
+    task: str = "multilabel",
+    config: Optional[Dict] = None,  # Added for compatibility but unused
+    pin_memory: bool = True
 ) -> Tuple[DataLoader, Optional[DataLoader]]:
     """
-    Create train and validation dataloaders.
+    Create train and validation dataloaders with K-Fold support.
     
     Args:
-        config: Configuration dictionary
-        train_csv: Path to training CSV
-        train_image_dir: Path to training images
-        val_csv: Path to validation CSV (optional)
-        val_image_dir: Path to validation images (optional)
-        mode: 'multilabel' or 'binary'
+        csv_path: Path to CSV file with labels
+        images_dir: Directory containing images
+        batch_size: Batch size
+        num_workers: Number of worker threads
+        fold: Current fold index (0 to num_folds-1)
+        num_folds: Total number of folds
+        task: 'multilabel' or 'binary'
+        config: Optional config dict (ignored, kept for compatibility)
+        pin_memory: Whether to pin memory for GPU
         
     Returns:
         Tuple of (train_loader, val_loader)
     """
-    image_size = config["dataset"]["image_size"]
-    batch_size = config["training"]["batch_size"]
-    num_workers = config["training"]["num_workers"]
-    pin_memory = config["training"]["pin_memory"]
-    aug_strength = config["regularization"]["augmentation_strength"]
+    # Load full dataframe
+    df = pd.read_csv(csv_path)
     
-    # Get disease columns from config
-    disease_columns = config["dataset"]["disease_columns"]
+    # Determine mode
+    mode = "binary" if task == "binary" else "multilabel"
     
-    # Create training dataset
+    # Split data
+    if fold is not None and num_folds is not None and num_folds > 1:
+        kf = KFold(n_splits=num_folds, shuffle=True, random_state=42)
+        splits = list(kf.split(df))
+        train_idx, val_idx = splits[fold]
+        
+        train_df = df.iloc[train_idx].reset_index(drop=True)
+        val_df = df.iloc[val_idx].reset_index(drop=True)
+    else:
+        # Single fold training (80/20 split)
+        from sklearn.model_selection import train_test_split
+        train_df, val_df = train_test_split(df, test_size=0.2, random_state=42)
+        train_df = train_df.reset_index(drop=True)
+        val_df = val_df.reset_index(drop=True)
+        
+    # Image size and augmentation (hardcoded defaults if config not used)
+    # Ideally we should parse config if provided, but let's stick to defaults 
+    # compatible with the rest of the project
+    image_size = 224
+    aug_strength = "medium"
+    
+    if config:
+        try:
+            image_size = config.get("dataset", {}).get("image_size", 224)
+            aug_strength = config.get("regularization", {}).get("augmentation_strength", "medium")
+        except:
+            pass
+            
+    # Get disease columns from config if available
+    disease_columns = None
+    if config and "dataset" in config and "disease_columns" in config["dataset"]:
+        disease_columns = config["dataset"]["disease_columns"]
+
+    # Transforms
     train_transform = get_train_transforms(image_size, strength=aug_strength)
+    val_transform = get_val_transforms(image_size)
+    
+    # Create Datasets
     train_dataset = RFMiDDataset(
-        csv_path=train_csv,
-        image_dir=train_image_dir,
+        csv_path=None,
+        image_dir=images_dir,
         mode=mode,
         transform=train_transform,
-        disease_columns=disease_columns,
-        target_size=image_size
+        dataframe=train_df,
+        target_size=image_size,
+        disease_columns=disease_columns
     )
     
     train_loader = DataLoader(
@@ -292,31 +341,31 @@ def get_dataloaders(
         shuffle=True,
         num_workers=num_workers,
         pin_memory=pin_memory,
-        drop_last=True  # Drop incomplete batches for stable training
+        drop_last=True
     )
     
-    # Create validation dataset if provided
     val_loader = None
-    if val_csv is not None and val_image_dir is not None:
-        val_transform = get_val_transforms(image_size)
+    if val_df is not None:
         val_dataset = RFMiDDataset(
-            csv_path=val_csv,
-            image_dir=val_image_dir,
+            csv_path=None,
+            image_dir=images_dir,
             mode=mode,
             transform=val_transform,
-            disease_columns=disease_columns,
-            target_size=image_size
+            dataframe=val_df,
+            target_size=image_size,
+            disease_columns=disease_columns
         )
         
         val_loader = DataLoader(
             val_dataset,
-            batch_size=batch_size * 2,  # Can use larger batch for validation
+            batch_size=batch_size * 2,
             shuffle=False,
             num_workers=num_workers,
             pin_memory=pin_memory
         )
-    
+        
     return train_loader, val_loader
+
 
 
 def compute_class_weights(labels: np.ndarray, mode: str = "multilabel") -> torch.Tensor:

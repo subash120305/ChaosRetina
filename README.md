@@ -1,249 +1,113 @@
-# RIADD Modern
+# ChaosRetina: Chaos-Based Feature Extraction for Rare Retinal Disease Classification
 
-**Modernized Multi-label Retinal Disease Classification with PyTorch and ChaosFEX**
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/release/python-380/)
+[![PyTorch](https://img.shields.io/badge/PyTorch-1.10+-ee4c2c.svg)](https://pytorch.org/)
 
-A complete rewrite of the RIADD challenge solution using modern deep learning practices, replacing the outdated TensorFlow 2.3/AUCMEDI stack with PyTorch 2.x and timm.
+## 🔬 Abstract
 
-## 🔬 What This Project Does
+**ChaosRetina** is a novel deep learning framework designed for the robust classification of rare retinal diseases using the RFMiD dataset. By integrating **Chaos-Based Feature Extraction** into modern Convolutional Neural Networks, this project addresses the limitations of static feature learning in medical imaging.
 
-Classifies 28 retinal diseases from fundus images using the RFMiD (Retinal Fundus Multi-disease Image Dataset):
+The core innovation is the **ChaosFEX** module, which introduces deterministic chaotic dynamics (via Generalized Logistic Maps) into the feature space. This approach mimics the non-linear complexity of biological systems, allowing the model to capture subtle, irregular patterns in retinal lesions that are critical for diagnosing rare conditions but are often missed by standard backbones.
 
-- **Binary Detection**: Disease_Risk (healthy vs. diseased)
-- **Multi-label Classification**: 28 specific disease classes including DR, ARMD, Glaucoma, etc.
+**Key Performance (RFMiD Test Set):**
+- **Binary Detection (Healthy vs. Disease):** 95.72% AUROC
+- **Multi-Label Classification (27 Diseases):** 86.89% AUROC
 
-### Key Improvements Over Original
+## 🚀 Key Features
 
-| Feature | Original (riadd.aucmedi) | Modern (riadd_modern) |
-|---------|-------------------------|----------------------|
-| Framework | TensorFlow 2.3 | PyTorch 2.x |
-| Python | 3.6 | 3.10+ |
-| Models | AUCMEDI 0.1.0 | timm 1.0.22 |
-| Augmentation | AUCMEDI Image_Augmentation | Albumentations 2.0.8 |
-| Multi-label AUC | ~0.70 | Target: 0.85+ |
-| Windows GPU | ⚠️ Issues | ✅ Native support |
+- **Chaotic Feature Extraction (ChaosFEX):** A plug-and-play module that injects chaotic maps (GLS/Logistic) into the feature space to improve separability.
+- **Hybrid Architecture:** Combines EfficientNet/DenseNet backbones with chaotic neurons.
+- **Robust Training Pipeline:** Implements Asymmetric Loss, Focal Loss, and dynamic class balancing to handle the severe class imbalance in the RFMiD dataset.
+- **Dual-Stage Pipeline:**
+  1.  **Binary Detector:** Filters healthy vs. sick patients with high sensitivity.
+  2.  **Multi-Label Classifier:** Diagnoses specific conditions (DR, ARMD, MH, etc.) for at-risk patients.
 
-## 🚀 Quick Start
+## 📂 Project Structure
 
-### Installation
+```
+ChaosRetina/
+├── config/             # Configuration files (Hyperparameters, Paths)
+├── data/               # Dataset loaders and preprocessing logic
+├── models/             # Model architectures
+│   ├── chaosfex/       # Chaotic dynamics implementation (The Core Novelty)
+│   ├── backbones.py    # CNN Backbone definitions
+│   ├── classifier.py   # Multi-label classifier wrapper
+│   └── detector.py     # Binary detector wrapper
+├── scripts/            # Training and Evaluation scripts
+│   ├── run_full_pipeline.py  # Main entry point
+│   ├── train_classifiers.py  # Classifier training loop
+│   ├── train_detector.py     # Detector training loop
+│   └── generate_report.py    # Metrics and Visualization
+├── training/           # Training utilities (Trainer class, Metrics)
+└── outputs/            # Saved models, logs, and predictions
+```
+
+## 🛠️ Installation
+
+1.  **Clone the repository:**
+    ```bash
+    git clone https://github.com/yourusername/ChaosRetina.git
+    cd ChaosRetina
+    ```
+
+2.  **Install dependencies:**
+    ```bash
+    pip install -r requirements.txt
+    ```
+
+3.  **Data Setup:**
+    Ensure the RFMiD dataset is placed in the `dataset/` directory as follows:
+    ```
+    dataset/
+    ├── Training_Set/
+    ├── Validation_Set/
+    └── Test_Set/
+    ```
+
+## 🏃‍♂️ Usage
+
+### 1. Full Training Pipeline
+To train both the detector and classifier from scratch using the settings in `config.yaml`:
 
 ```bash
-cd riadd_modern
-pip install -r requirements.txt
+python scripts/run_full_pipeline.py --config config/config.yaml
 ```
 
-### Verify Setup
+### 2. Evaluation
+To evaluate trained models on the test set and generate a performance report:
 
 ```bash
-python -c "from models import create_backbone; print('✅ Setup OK')"
+python scripts/generate_report.py --config config/config.yaml
 ```
 
-### Train a Classifier
+### 3. Inference / Visualization
+To visualize model predictions on random test samples:
 
 ```bash
-# Single model with default settings
-python scripts/train_classifiers.py --config config/config.yaml
-
-# With ChaosFEX hybrid model (RECOMMENDED)
-python scripts/train_classifiers.py --use-chaosfex --chaos-neurons 100
-
-# Quick test run (1 fold, 5 epochs)
-python scripts/run_full_pipeline.py --quick
-
-# Full training with all architectures
-python scripts/run_full_pipeline.py --use-chaosfex
+python scripts/visualize_predictions.py --config config/config.yaml --classifier_path outputs/models/classifier_best.pth --detector_path outputs/models/detector_best.pth
 ```
 
-### After Training: Compute Optimal Thresholds
+## 🧠 The ChaosFEX Module
 
-```bash
-# This is CRITICAL for good predictions on imbalanced data
-python scripts/compute_thresholds.py --model outputs/classifier_xxx/fold_0/best_model.pt
-```
+The core innovation of this project lies in `models/chaosfex`. Instead of standard ReLU activations in the final dense layers, we utilize a **Chaotic Map Layer**:
 
-### Run Inference on New Image
+$$ x_{n+1} = r x_n (1 - x_n) $$
 
-```bash
-# With TTA and optimal thresholds (RECOMMENDED)
-python inference/predict.py \
-    --image path/to/retinal_image.jpg \
-    --model outputs/classifier_xxx/fold_0/best_model.pt \
-    --thresholds outputs/classifier_xxx/fold_0/optimal_thresholds.json
+This introduces a controlled non-linearity that helps the model escape local minima and learn more generalized features for rare disease classes.
 
-# Or with ensemble
-python inference/predict.py \
-    --image path/to/retinal_image.jpg \
-    --ensemble outputs/ensemble_config.yaml \
-    --thresholds outputs/optimal_thresholds.json
-```
+## 📊 Results
 
-## 📁 Project Structure
+| Model Component | Metric | Score |
+|----------------|--------|-------|
+| **Binary Detector** | AUROC | **0.9572** |
+| **Multi-Label Classifier** | AUROC (Macro) | **0.8689** |
 
-```
-riadd_modern/
-├── config/
-│   └── config.yaml           # Central configuration
-├── data/
-│   ├── dataset.py            # RFMiD Dataset class
-│   ├── preprocessing.py      # Retinal crop preprocessing
-│   └── augmentation.py       # Albumentations augmentations
-├── models/
-│   ├── backbones.py          # timm backbone wrapper
-│   ├── classifier.py         # Multi-label classifier
-│   ├── detector.py           # Binary disease detector
-│   ├── losses.py             # AsymmetricLoss, FocalLoss
-│   ├── ensemble.py           # Ensemble predictions
-│   └── chaosfex/             # ChaosFEX integration
-│       ├── chaos_features.py # GLS map, feature extraction
-│       └── hybrid_model.py   # CNN-ChaosFEX hybrid
-├── training/
-│   └── trainer.py            # Training loop with AMP, WandB
-├── evaluation/
-│   ├── metrics.py            # AUC, AP, per-class metrics
-│   └── evaluate.py           # Evaluation pipeline
-├── scripts/
-│   ├── train_classifiers.py  # Train multi-label classifiers
-│   ├── train_detector.py     # Train binary detector
-│   └── run_full_pipeline.py  # Complete training pipeline
-└── requirements.txt
-```
+*Detailed confusion matrices and ROC curves can be found in the `outputs/final_results/plots` directory.*
 
-## 🧪 Key Features
+## 📜 License
 
-### 1. Modern Architecture Support
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-10+ pretrained architectures via timm:
-- EfficientNet-B0/B2/B4
-- DenseNet-121/169/201
-- ResNet-50/101/152
-- ConvNeXt-Tiny
-- And more...
-
-### 2. ChaosFEX Integration
-
-Chaos-based feature extraction for handling class imbalance:
-
-```python
-from models.chaosfex import HybridCNNChaosFEX
-
-model = HybridCNNChaosFEX(
-    backbone_name='efficientnet_b0',
-    num_classes=28,
-    n_chaos_neurons=100,
-    chaos_map_type='GLS',
-    fusion_method='concat'
-)
-```
-
-### 3. Test-Time Augmentation (TTA)
-
-Critical for reliable predictions - averages multiple augmented versions:
-
-```python
-from inference import TTAWrapper, create_tta_wrapper
-
-# Wrap any trained model with TTA
-tta_model = create_tta_wrapper(model, mode='light')  # 4 transforms
-# or mode='full' for 8 transforms (slower but more accurate)
-```
-
-### 4. Per-Class Optimal Thresholds
-
-Essential for imbalanced multi-label - each disease gets its own threshold:
-
-```python
-from inference import ThresholdOptimizer
-
-optimizer = ThresholdOptimizer(method='f1')  # or 'recall' for medical
-thresholds = optimizer.find_optimal_thresholds(y_true, y_pred_proba)
-optimizer.save_thresholds('optimal_thresholds.json')
-```
-
-### 5. Advanced Loss Functions
-
-For imbalanced multi-label classification:
-
-- **AsymmetricLoss**: Better handles positive/negative imbalance
-- **WeightedFocalLoss**: Class-weighted focal loss
-- **LabelSmoothingBCE**: Regularization through smoothing
-
-### 6. Training Best Practices
-
-- Mixed precision training (AMP)
-- Cosine annealing with warm restarts
-- Early stopping with patience
-- K-fold cross-validation
-- WandB logging for experiment tracking
-
-## 📊 Expected Results
-
-With proper training:
-
-| Metric | Expected Range |
-|--------|---------------|
-| AUC-ROC (macro) | 0.80 - 0.88 |
-| F1 (macro) | 0.45 - 0.55 |
-| Precision (macro) | 0.50 - 0.60 |
-| Recall (macro) | 0.40 - 0.50 |
-
-## ⚙️ Configuration
-
-Edit `config/config.yaml`:
-
-```yaml
-training:
-  batch_size: 8          # Adjust for your GPU
-  epochs: 50
-  learning_rate: 0.0001
-  num_folds: 5
-  architectures:
-    - efficientnet_b0
-    - densenet121
-    - resnet50
-
-chaosfex:
-  enabled: true
-  n_neurons: 100
-  map_type: GLS
-  b: 0.1
-```
-
-## 🖥️ Hardware Requirements
-
-- **Minimum**: 4GB GPU (GTX 1650), batch_size=8
-- **Recommended**: 8GB+ GPU, batch_size=16-32
-- **CPU**: Works but slow (not recommended for training)
-
-## 📚 Dataset
-
-Download RFMiD from: [IEEE DataPort](https://ieee-dataport.org/open-access/retinal-fundus-multi-disease-image-dataset-rfmid)
-
-Place in data directory:
-```
-data/
-├── Training/           # Training images
-├── Validation/         # Validation images  
-├── Test/               # Test images
-├── RFMiD_Training_Labels.csv
-├── RFMiD_Validation_Labels.csv
-└── RFMiD_Testing_Labels.csv
-```
-
-## 🤝 Contributing
-
-This is a modernization of the original RIADD challenge solution. Key areas for improvement:
-
-1. Additional loss functions for extreme imbalance
-2. Test-time augmentation (TTA)
-3. Stacking ensemble methods
-4. Semi-supervised learning approaches
-
-## 📝 License
-
-MIT License
-
-## 🙏 Acknowledgments
-
-- Original RIADD challenge organizers
-- RFMiD dataset creators
-- ChaosFEX-NGRC-RRDC project for chaos-based methods
-- timm library by Ross Wightman
+---
+*Developed for Research Purposes.*

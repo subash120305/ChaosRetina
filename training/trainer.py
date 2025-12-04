@@ -16,7 +16,7 @@ Features:
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
-from torch.cuda.amp import GradScaler, autocast
+# from torch.cuda.amp import GradScaler, autocast # Deprecated
 from typing import Dict, Optional, Any, Callable
 from pathlib import Path
 import time
@@ -97,7 +97,7 @@ class Trainer:
         self.clip_grad_norm = train_config.get("clip_grad_norm", 1.0)
         
         # Mixed precision scaler
-        self.scaler = GradScaler() if self.use_amp else None
+        self.scaler = torch.amp.GradScaler('cuda') if self.use_amp else None
         
         # Early stopping
         es_config = train_config
@@ -157,7 +157,7 @@ class Trainer:
             
             # Forward pass with mixed precision
             if self.use_amp:
-                with autocast():
+                with torch.amp.autocast('cuda'):
                     outputs = self.model(images)
                     if self.mixup_fn is not None:
                         loss = lam * self.criterion(outputs, targets_a) + \
@@ -231,7 +231,7 @@ class Trainer:
             targets = targets.to(self.device, non_blocking=True)
             
             if self.use_amp:
-                with autocast():
+                with torch.amp.autocast('cuda'):
                     outputs = self.model(images)
                     loss = self.criterion(outputs, targets)
             else:
@@ -265,6 +265,16 @@ class Trainer:
         if outputs.dim() == 1 or outputs.size(1) == 1:
             # Binary classification
             probs = torch.sigmoid(outputs).numpy()
+            targets_np = targets.numpy()
+            
+            try:
+                auroc = roc_auc_score(targets_np, probs)
+            except ValueError:
+                auroc = 0.5
+        elif outputs.size(1) == 2:
+            # Binary classification with 2 outputs (CrossEntropy)
+            # Apply softmax and take probability of class 1
+            probs = torch.softmax(outputs, dim=1)[:, 1].numpy()
             targets_np = targets.numpy()
             
             try:
