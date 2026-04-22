@@ -1,20 +1,74 @@
-# Datasets (Keep ignored)
+# ─── Dataset (large files, not for repo) ────────────────────
 dataset/
-data/Training_Set/
-data/Validation_Set/
-data/Test_Set/
+data/
 
-# Python cache
+# ─── Model weights (too large for GitHub) ───────────────────
+*.pth
+*.pt
+*.ckpt
+*.pkl
+*.bin
+outputs/models/
+
+# ─── Presentation & manuscript (private documents) ──────────
+*.pptx
+*.ppt
+*.doc
+*.docx
+*.pdf
+
+# ─── Generated outputs (reproducible, not needed in repo) ───
+outputs/predictions/
+outputs/logs/
+outputs/final_results/
+# Keep visualizations (shows results visually)
+# outputs/visualizations/   ← intentionally tracked
+
+# ─── Python cache ────────────────────────────────────────────
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
+.eggs/
+*.egg-info/
+dist/
+build/
 
-# IDE settings
+# ─── Jupyter notebooks checkpoints ──────────────────────────
+.ipynb_checkpoints/
+*.ipynb
+
+# ─── Virtual environments ────────────────────────────────────
+venv/
+env/
+.venv/
+ENV/
+
+# ─── IDE & editor settings ───────────────────────────────────
 .vscode/
 .idea/
 *.swp
+*.swo
+*~
 
-# System
+# ─── OS generated ────────────────────────────────────────────
 .DS_Store
 Thumbs.db
+desktop.ini
+
+# ─── Experiment tracking ─────────────────────────────────────
+wandb/
+mlruns/
+.neptune/
+
+# ─── Logs ────────────────────────────────────────────────────
+*.log
+logs/
+pipeline_log.txt
+
+# ─── Temporary files ─────────────────────────────────────────
+*.tmp
+*.bak
+*.orig
+tmp/
+temp/
