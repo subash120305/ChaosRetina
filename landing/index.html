@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>ChaosRetina — Chaos-Based Multi-Label Retinal Disease Detection</title>
+  <meta name="description" content="ChaosRetina: Two-stage deep learning framework using Generalized Luroth Series chaos maps for multi-label retinal disease classification. Best Paper Award — ICKECS 2026."/>
+  <link rel="stylesheet" href="style.css"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800&family=Barlow:wght@400;500;600&family=Space+Mono&display=swap" rel="stylesheet"/>
+</head>
+<body>
+
+<!-- ── NAV ───────────────────────────────────────────────── -->
+<nav class="nav">
+  <a class="nav-brand" href="#">
+    <svg class="nav-logo" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <!-- outer sclera ring -->
+      <circle cx="16" cy="16" r="14.5" stroke="#E8621A" stroke-width="1.2" fill="#060A07"/>
+      <!-- blood vessels from optic disc -->
+      <path d="M20 13 C18 10 15 8 12 7" stroke="#E8621A" stroke-width="0.9" fill="none" opacity="0.7"/>
+      <path d="M20 13 C21 10 22 8 21 6" stroke="#E8621A" stroke-width="0.7" fill="none" opacity="0.5"/>
+      <path d="M20 13 C18 16 15 19 12 21" stroke="#E8621A" stroke-width="0.9" fill="none" opacity="0.7"/>
+      <path d="M20 13 C21 16 22 18 21 21" stroke="#E8621A" stroke-width="0.7" fill="none" opacity="0.5"/>
+      <path d="M20 13 C17 13 14 13 11 12" stroke="#E8621A" stroke-width="0.7" fill="none" opacity="0.5"/>
+      <!-- macula -->
+      <circle cx="12" cy="15" r="3" fill="#060A07" opacity="0.9"/>
+      <!-- optic disc glow -->
+      <circle cx="20" cy="13" r="4.5" fill="#E8621A" opacity="0.18"/>
+      <circle cx="20" cy="13" r="2.5" fill="#E8621A" opacity="0.5"/>
+      <circle cx="20" cy="13" r="1.2" fill="#F5C842" opacity="0.9"/>
+      <!-- chaos particle -->
+      <circle cx="20" cy="13" r="5" fill="none" stroke="#2EFF9A" stroke-width="0.6" opacity="0.5" stroke-dasharray="2 2"/>
+    </svg>
+    Chaos<span class="nav-accent">Retina</span>
+  </a>
+  <ul class="nav-links">
+    <li><a href="#problem">Problem</a></li>
+    <li><a href="#method">Architecture</a></li>
+    <li><a href="#chaosfex">ChaosFEX</a></li>
+    <li><a href="#results">Results</a></li>
+    <li><a href="#publication">Publication</a></li>
+    <li><a href="#developer">Developer</a></li>
+  </ul>
+  <a class="nav-cta" href="https://github.com/subash120305/chaosretina" target="_blank" rel="noopener">↗ GitHub</a>
+</nav>
+
+<!-- ── HERO ──────────────────────────────────────────────── -->
+<section class="hero">
+  <div class="hero-inner">
+    <div class="hero-text">
+      <div class="hero-badge">
+        <span class="badge-dot"></span>
+        Best Paper Award · ICKECS 2026 · IEEE
+      </div>
+      <h1 class="hero-title">
+        <span class="t-chaos">Chaos</span>Retina
+      </h1>
+      <p class="hero-subtitle">Chaos-Based Feature Extraction · Multi-Label Retinal Disease Detection</p>
+      <div class="hero-sep"></div>
+      <p class="hero-desc">
+        Standard CNNs smooth over the microscopic differences that separate visually similar
+        retinal diseases. ChaosRetina injects <strong>Generalized Luroth Series chaotic maps</strong>
+        into the feature pipeline — exploiting sensitive dependence on initial conditions to
+        amplify inter-class differences that conventional deep learning cannot see.
+      </p>
+      <div class="hero-stats">
+        <div class="stat">
+          <span class="stat-val">0.957</span>
+          <span class="stat-key">Detector AUROC</span>
+        </div>
+        <div class="stat">
+          <span class="stat-val">0.913</span>
+          <span class="stat-key">Weighted AUROC</span>
+        </div>
+        <div class="stat">
+          <span class="stat-val">27</span>
+          <span class="stat-key">Disease Classes</span>
+        </div>
+        <div class="stat">
+          <span class="stat-val">0</span>
+          <span class="stat-key">Added Params</span>
+        </div>
+      </div>
+      <div class="hero-cta">
+        <a class="btn-primary" href="https://github.com/subash120305/chaosretina" target="_blank" rel="noopener">↗ View on GitHub</a>
+        <a class="btn-ghost" href="#method">→ Explore Architecture</a>
+      </div>
+    </div>
+
+    <!-- Animated retinal fundus SVG -->
+    <div class="hero-visual" aria-hidden="true">
+      <svg class="retina-svg" viewBox="0 0 440 440" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <radialGradient id="fundusGrad" cx="47%" cy="47%" r="54%">
+            <stop offset="0%"   stop-color="#1C0E09"/>
+            <stop offset="45%"  stop-color="#0D0908"/>
+            <stop offset="100%" stop-color="#060A07"/>
+          </radialGradient>
+          <radialGradient id="discGrad" cx="50%" cy="50%" r="50%">
+            <stop offset="0%"   stop-color="#F5C842" stop-opacity="0.9"/>
+            <stop offset="30%"  stop-color="#E8621A" stop-opacity="0.75"/>
+            <stop offset="100%" stop-color="#E8621A" stop-opacity="0"/>
+          </radialGradient>
+          <filter id="glow" x="-80%" y="-80%" width="260%" height="260%">
+            <feGaussianBlur stdDeviation="5" result="b"/>
+            <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+          </filter>
+          <filter id="softglow" x="-120%" y="-120%" width="340%" height="340%">
+            <feGaussianBlur stdDeviation="14" result="b"/>
+            <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+          </filter>
+          <clipPath id="fundusClip">
+            <circle cx="220" cy="220" r="208"/>
+          </clipPath>
+        </defs>
+
+        <!-- Fundus background -->
+        <circle cx="220" cy="220" r="208" fill="url(#fundusGrad)" stroke="#1A2820" stroke-width="1.5"/>
+
+        <!-- Pulsing rings -->
+        <circle class="ring"    cx="220" cy="220" r="68"  fill="none" stroke="#E8621A" stroke-width="0.6"/>
+        <circle class="ring r2" cx="220" cy="220" r="118" fill="none" stroke="#E8621A" stroke-width="0.4"/>
+        <circle class="ring r3" cx="220" cy="220" r="172" fill="none" stroke="#E8621A" stroke-width="0.28"/>
+
+        <!-- Blood vessel network — optic disc at (280, 195) -->
+        <!-- Superior temporal -->
+        <path class="vessel"    d="M 280 195 C 268 162 244 126 208 102" stroke="#E8621A" stroke-width="1.7" fill="none"/>
+        <path class="vessel v2" d="M 280 195 C 292 160 304 122 294 92"  stroke="#E8621A" stroke-width="1.2" fill="none"/>
+        <path class="vessel v2" d="M 250 148 C 235 136 216 130 196 128" stroke="#E8621A" stroke-width="0.8" fill="none"/>
+        <path class="vessel v2" d="M 208 102 C 192 96  174 94  156 100" stroke="#E8621A" stroke-width="0.6" fill="none"/>
+        <!-- Inferior temporal -->
+        <path class="vessel"    d="M 280 195 C 266 230 240 265 206 288" stroke="#E8621A" stroke-width="1.7" fill="none"/>
+        <path class="vessel v2" d="M 280 195 C 294 230 308 264 296 294" stroke="#E8621A" stroke-width="1.2" fill="none"/>
+        <path class="vessel v2" d="M 246 254 C 232 266 214 274 194 272" stroke="#E8621A" stroke-width="0.8" fill="none"/>
+        <path class="vessel v2" d="M 206 288 C 190 298 172 300 156 294" stroke="#E8621A" stroke-width="0.6" fill="none"/>
+        <!-- Nasal vessels -->
+        <path class="vessel v2" d="M 280 195 C 248 192 210 188 170 182" stroke="#E8621A" stroke-width="1.1" fill="none"/>
+        <path class="vessel v2" d="M 280 195 C 250 207 214 218 178 222" stroke="#E8621A" stroke-width="0.9" fill="none"/>
+        <path class="vessel v2" d="M 210 186 C 196 176 180 170 162 174" stroke="#E8621A" stroke-width="0.6" fill="none"/>
+        <path class="vessel v2" d="M 214 218 C 198 228 180 233 162 228" stroke="#E8621A" stroke-width="0.6" fill="none"/>
+
+        <!-- Macula -->
+        <circle cx="166" cy="210" r="26" fill="#060A07" opacity="0.9"/>
+        <circle cx="166" cy="210" r="11" fill="#0A080A" opacity="0.95"/>
+
+        <!-- Optic disc -->
+        <circle cx="280" cy="195" r="58" fill="url(#discGrad)" opacity="0.45" filter="url(#softglow)"/>
+        <circle cx="280" cy="195" r="26" fill="#E8621A" opacity="0.55" filter="url(#glow)"/>
+        <circle cx="280" cy="195" r="11" fill="#F5C842" opacity="0.9"  filter="url(#glow)"/>
+
+        <!-- Chaos orbit particles — origin at optic disc (280,195) -->
+        <g transform="translate(280,195)">
+          <g class="cp1" filter="url(#glow)">
+            <circle cx="0" cy="0" r="5.5" fill="#2EFF9A" opacity="0.92"/>
+            <circle cx="0" cy="0" r="10"  fill="#2EFF9A" opacity="0.22"/>
+          </g>
+          <circle class="cp2" cx="0" cy="0" r="3.5" fill="#2EFF9A" opacity="0.75"/>
+          <g class="cp3" filter="url(#glow)">
+            <circle cx="0" cy="0" r="4" fill="#2EFF9A" opacity="0.8"/>
+          </g>
+          <circle class="cp4" cx="0" cy="0" r="2.8" fill="#2EFF9A" opacity="0.55"/>
+          <g class="cp5" filter="url(#glow)">
+            <circle cx="0" cy="0" r="3.2" fill="#F5C842" opacity="0.82"/>
+          </g>
+        </g>
+
+        <!-- Edge vignette -->
+        <circle cx="220" cy="220" r="207" fill="none" stroke="#060A07" stroke-width="7"/>
+      </svg>
+    </div>
+  </div>
+</section>
+
+<!-- ── PROBLEM ────────────────────────────────────────────── -->
+<section class="section problem-section" id="problem">
+  <div class="section-inner">
+    <p class="section-label">The Clinical Gap</p>
+    <h2 class="section-head">Retinal screening at scale is broken</h2>
+    <p class="section-sub">
+      285 million people live with preventable visual impairment. The bottleneck
+      isn't treatment — it's early detection. Ophthalmologists are scarce; fundus cameras are not.
+    </p>
+    <div class="prob-grid">
+      <div class="prob-card">
+        <div class="prob-num">01 — RARE DISEASE GAP</div>
+        <h3>27 diseases. Most invisible to training.</h3>
+        <p>
+          RFMiD spans 27 disease classes, but rare conditions like Retinitis Pigmentosa
+          appear in under 1% of cases. Standard CNNs trained naively collapse —
+          predicting Diabetic Retinopathy for everything.
+        </p>
+        <span class="prob-stat warn">Macro-F1 → 0.11 under standard cross-entropy</span>
+      </div>
+      <div class="prob-card">
+        <div class="prob-num">02 — CNN SMOOTHNESS PROBLEM</div>
+        <h3>Convolution averages out what matters most.</h3>
+        <p>
+          Convolution is linear. Small lesion features cause small activation changes —
+          which vanish in deep networks. The same subtle difference that distinguishes
+          Drusen from Exudates gets averaged out before the classifier ever sees it.
+        </p>
+        <span class="prob-stat warn">Tiny Δlesion → tiny Δactivation → missed diagnosis</span>
+      </div>
+      <div class="prob-card">
+        <div class="prob-num">03 — SCALE VS ACCURACY</div>
+        <h3>Bigger backbones don't fix small datasets.</h3>
+        <p>
+          ViT-B/16 models long-range retinal dependencies but requires 85.8M parameters
+          and pre-training on 100K+ images. RFMiD has 3,200. CNNs with inductive biases
+          for local lesion structure are the right prior here.
+        </p>
+        <span class="prob-stat warn">ViT-B/16 — 16.85 ms/img · 400 MB VRAM</span>
+      </div>
+      <div class="prob-card">
+        <div class="prob-num">04 — THE CONSTRAINT</div>
+        <h3>Clinical throughput is non-negotiable.</h3>
+        <p>
+          Any viable automated screener must run under 5 ms per image,
+          work on hospital-grade hardware, and produce decisions that can
+          pass clinical audit. Interpretability isn't optional.
+        </p>
+        <span class="prob-stat ok">EfficientNet-B0 — 1.94 ms/img · 112 MB VRAM</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── ARCHITECTURE ───────────────────────────────────────── -->
+<section class="section" id="method">
+  <div class="section-inner">
+    <p class="section-label">System Design</p>
+    <h2 class="section-head">Two stages. One decision.</h2>
+    <p class="section-sub">
+      A cascaded architecture separates the binary detection problem from the harder
+      multi-label classification — routing only diseased images to the ChaosFEX stage,
+      reducing compute and false alarm rates simultaneously.
+    </p>
+    <div class="pipeline">
+
+      <div class="pipe-stage">
+        <div class="pipe-num">01</div>
+        <div class="pipe-body">
+          <div class="pipe-tag">Stage 1 — Binary Gate</div>
+          <h3>Disease Detector</h3>
+          <p>
+            EfficientNet-B0 acts as a coarse binary classifier: <em>Healthy vs. Diseased</em>.
+            Focal Loss focuses training on the misclassified borderline cases — early-stage
+            presentations that standard binary cross-entropy overlooks. Only diseased images
+            proceed to Stage 2.
+          </p>
+          <div class="arch-flow">Fundus Image [224×224×3]
+   ↓  EfficientNet-B0 (compound-scaled backbone)
+   ↓  Global Average Pooling → [1280-dim vector]
+   ↓  FC(256) → ReLU → Dropout(0.3) → FC(1)
+   ↓  <span class="hl">Sigmoid → P(Disease | image)</span>  ·  threshold @ 0.45
+   →  Healthy (stop)  ∣  <span class="hlg">Diseased → Stage 2</span></div>
+          <div class="pipe-tags">
+            <span class="ptag o">AUROC 0.9572</span>
+            <span class="ptag o">Accuracy 93.8%</span>
+            <span class="ptag o">F1 0.942</span>
+            <span class="ptag y">Focal Loss γ=2</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="pipe-stage">
+        <div class="pipe-num">02</div>
+        <div class="pipe-body">
+          <div class="pipe-tag green">ChaosFEX Module — Core Innovation</div>
+          <h3>Generalized Luroth Series Feature Extraction</h3>
+          <p>
+            CNN feature vectors become <em>initial conditions</em> for 100 chaotic neurons.
+            Each neuron runs 500 GLS map iterations. Four statistics are extracted per neuron —
+            giving a 400-dimensional chaos representation that encodes nonlinear trajectory
+            dynamics invisible to the CNN backbone.
+          </p>
+          <div class="arch-flow">[1280-dim CNN features]
+   ↓  Normalize → (0, 1)  ← initial conditions x₀ for 100 neurons
+   ↓  GLS Map:  <span class="hlg">x_{n+1} = (x_n + b·x_n²) mod 1</span>  [b=0.1, 500 iters]
+   ↓  Per-neuron: [MFT, MFR, ME, MEnt]  ×100 → <span class="hlg">[400-dim ChaosFEX]</span>
+   ↓  Linear projection → [1280-dim]
+   ↓  Concat: [<span class="hl">1280 CNN</span> ‖ <span class="hlg">1280 chaos</span>] = <span class="hl">[2560-dim fused]</span></div>
+          <div class="pipe-tags">
+            <span class="ptag g">0 Trainable Params</span>
+            <span class="ptag g">100 GLS Neurons</span>
+            <span class="ptag g">500 Iterations Each</span>
+            <span class="ptag y">Butterfly Effect</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="pipe-stage">
+        <div class="pipe-num">03</div>
+        <div class="pipe-body">
+          <div class="pipe-tag">Stage 2 — Multi-Label Classifier</div>
+          <h3>HybridCNNChaosFEX — 27 Disease Classes</h3>
+          <p>
+            The fused 2560-dim representation feeds a classifier head. Each of 27 diseases
+            is treated as an independent binary prediction — sigmoid outputs, BCE loss with
+            per-class positive weights. Per-class threshold optimization independently
+            calibrates rare disease detection.
+          </p>
+          <div class="arch-flow">[2560-dim fused]
+   ↓  FC(512) → ReLU → Dropout(0.4) → FC(27)
+   ↓  <span class="hlg">Sigmoid → 27 disease probabilities</span>
+   ↓  Per-class threshold: τ* = argmax<sub>τ</sub> F1(τ)
+   →  <span class="hl">Final Multi-Label Prediction</span></div>
+          <div class="pipe-tags">
+            <span class="ptag o">Macro-AUROC 0.8689</span>
+            <span class="ptag o">Weighted AUROC 0.913</span>
+            <span class="ptag o">Hamming 94.6%</span>
+            <span class="ptag y">Per-Class Threshold Opt.</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="pipe-stage">
+        <div class="pipe-num">04</div>
+        <div class="pipe-body">
+          <div class="pipe-tag">Interpretability</div>
+          <h3>Iterative Causal Erasure (ICE)</h3>
+          <p>
+            Grad-CAM produces heatmaps — suggestive, but not proof. ICE goes further:
+            slide a window to find the region causing the highest confidence drop, surgically
+            remove it via Telea inpainting, re-evaluate. When the model returns "Healthy,"
+            those erased pixels were the <em>causal evidence</em> for the diagnosis.
+          </p>
+          <div class="arch-flow">Original Image → sliding scan: find region → max score drop
+   ↓  Telea Inpainting → <span class="hl">digitally healed image</span>
+   ↓  Re-evaluate → still Disease? → loop
+   ↓  Predicts Healthy?
+   →  <span class="hlg">Erased pixels = causal evidence (verified)</span></div>
+          <div class="pipe-tags">
+            <span class="ptag g">Beyond Grad-CAM</span>
+            <span class="ptag g">Causal, Not Correlational</span>
+            <span class="ptag y">Clinical Audit-Ready</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ── CHAOSFEX ────────────────────────────────────────────── -->
+<section class="section chaosfex-section" id="chaosfex">
+  <div class="section-inner">
+    <p class="section-label green">The Core Innovation</p>
+    <h2 class="section-head">Why chaos works</h2>
+    <p class="section-sub">
+      The Butterfly Effect isn't metaphor here — it's the mechanism. Sensitive dependence
+      on initial conditions turns a tiny CNN activation difference into a dramatically
+      different chaotic trajectory. The classifier sees what the CNN almost missed.
+    </p>
+    <div class="chaosfex-grid">
+
+      <!-- Left: equation + feature cards -->
+      <div>
+        <div class="eq-block">
+          <div class="eq-label">Generalized Luroth Series Map</div>
+          <div class="equation">
+            x<span class="sub">n+1</span> &nbsp;=&nbsp; ( x<span class="sub">n</span> &nbsp;+&nbsp; b · x<span class="sub">n</span><span class="sup">2</span> ) mod 1
+          </div>
+          <p class="eq-note">
+            <strong>b = 0.1</strong> &nbsp;·&nbsp; 500 iterations per neuron &nbsp;·&nbsp; 100 neurons<br>
+            Initial condition x₀ ∈ (0,1) is the normalized CNN activation.
+            A difference Δx₀ ≈ 10⁻⁴ in the CNN output grows exponentially —
+            after 50+ iterations the trajectories are completely uncorrelated.
+          </p>
+        </div>
+
+        <div class="chaos-features">
+          <div class="feat-card">
+            <div class="feat-abbr">MFT</div>
+            <div class="feat-name">Mean Firing Time</div>
+            <p class="feat-desc">Average gap between threshold crossings. Measures inter-spike regularity of the chaotic trajectory.</p>
+          </div>
+          <div class="feat-card">
+            <div class="feat-abbr">MFR</div>
+            <div class="feat-name">Mean Firing Rate</div>
+            <p class="feat-desc">Threshold crossings per 500 iterations. Higher rate = more oscillatory, active trajectory.</p>
+          </div>
+          <div class="feat-card">
+            <div class="feat-abbr">ME</div>
+            <div class="feat-name">Mean Energy</div>
+            <p class="feat-desc">Mean squared trajectory value. Captures the attractor's energy distribution in phase space.</p>
+          </div>
+          <div class="feat-card">
+            <div class="feat-abbr">MEnt</div>
+            <div class="feat-name">Mean Entropy</div>
+            <p class="feat-desc">Shannon entropy of the trajectory histogram. High entropy = chaotic; low = periodic or fixed-point.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right: orbit animation + notes -->
+      <div class="chaos-anim-wrap">
+        <div class="chaos-orbit" aria-hidden="true">
+          <svg viewBox="0 0 380 380" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <filter id="cglow" x="-80%" y="-80%" width="260%" height="260%">
+                <feGaussianBlur stdDeviation="6" result="b"/>
+                <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+              </filter>
+            </defs>
+            <rect width="380" height="380" fill="#0D1510" rx="12"/>
+            <!-- Orbit trace rings -->
+            <circle cx="190" cy="190" r="72"  fill="none" stroke="#1E2E22" stroke-width="1" stroke-dasharray="4 3"/>
+            <circle cx="190" cy="190" r="113" fill="none" stroke="#1E2E22" stroke-width="1" stroke-dasharray="4 3"/>
+            <circle cx="190" cy="190" r="148" fill="none" stroke="#1E2E22" stroke-width="0.5" stroke-dasharray="3 4"/>
+            <!-- Central node — CNN feature vector -->
+            <circle cx="190" cy="190" r="20" fill="rgba(232,98,26,0.18)" stroke="#E8621A" stroke-width="1.5"/>
+            <circle cx="190" cy="190" r="9"  fill="#E8621A" opacity="0.82" filter="url(#cglow)"/>
+            <text x="190" y="316" text-anchor="middle" font-size="10" fill="#5C6E63" font-family="Space Mono, monospace">100 GLS neurons</text>
+            <text x="190" y="332" text-anchor="middle" font-size="10" fill="#5C6E63" font-family="Space Mono, monospace">500 iterations each</text>
+            <!-- Orbiting particles — origin at (190,190) -->
+            <g transform="translate(190,190)">
+              <g class="op1" filter="url(#cglow)">
+                <circle cx="0" cy="0" r="5.5" fill="#2EFF9A"/>
+                <circle cx="0" cy="0" r="10"  fill="#2EFF9A" opacity="0.2"/>
+              </g>
+              <circle class="op2" cx="0" cy="0" r="4"   fill="#2EFF9A" opacity="0.78"/>
+              <g class="op3" filter="url(#cglow)">
+                <circle cx="0" cy="0" r="3.8" fill="#2EFF9A" opacity="0.75"/>
+              </g>
+              <circle class="op4" cx="0" cy="0" r="3.2" fill="#F5C842" opacity="0.72"/>
+              <circle class="op5" cx="0" cy="0" r="3"   fill="#2EFF9A" opacity="0.6"/>
+              <circle class="op6" cx="0" cy="0" r="2.5" fill="#C4486E" opacity="0.65"/>
+            </g>
+          </svg>
+        </div>
+
+        <div class="butterfly-note">
+          <strong>The Butterfly Effect as Feature Extractor</strong><br><br>
+          Tiny CNN activation difference Δx₀ → dramatically divergent
+          chaotic trajectory after 50+ GLS iterations → very different
+          [MFT, MFR, ME, MEnt] statistics.<br><br>
+          The disease classifier sees this <span class="mono">amplified difference</span>,
+          not the original subtle one. Rare disease classes that produce
+          microscopic CNN activation changes become clearly separable in
+          the 400-dimensional chaos feature space.
+        </div>
+
+        <div class="zero-params">
+          <div class="zero-num">0</div>
+          <div class="zero-text">
+            <strong>Zero trainable parameters added.</strong><br>
+            ChaosFEX is a deterministic mathematical transform with no weights and no gradients.
+            The full model stays at EfficientNet-B0's 4.0M parameters while the feature
+            space gains 400 chaotically-derived dimensions.
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ── RESULTS ─────────────────────────────────────────────── -->
+<section class="section" id="results">
+  <div class="section-inner">
+    <p class="section-label">Benchmark Performance</p>
+    <h2 class="section-head">Numbers that matter clinically</h2>
+    <p class="section-sub">
+      Validated on RFMiD — 3,200 fundus images, 27 disease classes.
+      AUROC measures class separation regardless of threshold, the gold standard
+      for imbalanced multi-label evaluation.
+    </p>
+
+    <div class="metrics-row">
+      <div class="metric-card pri">
+        <div class="metric-task">Stage 1 · Detector</div>
+        <div class="metric-val">0.957</div>
+        <div class="metric-name">AUROC — Healthy vs. Disease</div>
+      </div>
+      <div class="metric-card pri">
+        <div class="metric-task">Stage 1 · Detector</div>
+        <div class="metric-val">93.8%</div>
+        <div class="metric-name">Accuracy</div>
+      </div>
+      <div class="metric-card pri">
+        <div class="metric-task">Stage 1 · Detector</div>
+        <div class="metric-val">0.942</div>
+        <div class="metric-name">F1-Score</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-task g">Stage 2 · Classifier</div>
+        <div class="metric-val g">0.869</div>
+        <div class="metric-name">Macro-AUROC — 27 Classes</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-task g">Stage 2 · Classifier</div>
+        <div class="metric-val g">0.913</div>
+        <div class="metric-name">Weighted AUROC</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-task g">Stage 2 · Classifier</div>
+        <div class="metric-val g">94.6%</div>
+        <div class="metric-name">Hamming Accuracy</div>
+      </div>
+    </div>
+
+    <div class="results-grid">
+      <div class="result-img-card">
+        <img src="outputs/final_results/plots/detector_roc_curve.png" alt="Detector ROC curve — AUROC 0.9572" loading="lazy"/>
+        <div class="img-caption">
+          <strong>Stage 1 ROC Curve.</strong> Disease detector separating
+          Healthy vs. Diseased. AUROC 0.9572.
+        </div>
+      </div>
+      <div class="result-img-card">
+        <img src="outputs/final_results/plots/classifier_per_class_auroc.png" alt="Per-class AUROC across 27 diseases" loading="lazy"/>
+        <div class="img-caption">
+          <strong>Per-Class AUROC — 27 Diseases.</strong> Multi-label
+          classifier performance broken down by disease category.
+        </div>
+      </div>
+      <div class="result-img-card wide">
+        <img src="outputs/visualizations/chaosfex_feature_comparison.png" alt="t-SNE feature space comparison: CNN alone vs ChaosFEX" loading="lazy"/>
+        <div class="img-caption">
+          <strong>Feature Space Comparison (t-SNE).</strong> ChaosFEX
+          representations (right) show tighter, better-separated clusters
+          compared to CNN-only features (left) — especially for rare disease classes
+          where the CNN activation differences are smallest.
+        </div>
+      </div>
+      <div class="result-img-card">
+        <img src="outputs/visualizations/roc_comparison.png" alt="ROC comparison across architectures" loading="lazy"/>
+        <div class="img-caption">
+          <strong>ROC Comparison.</strong> HybridCNNChaosFEX vs.
+          baseline architectures across disease subsets.
+        </div>
+      </div>
+      <div class="result-img-card">
+        <img src="outputs/visualizations/model_performance_comparison.png" alt="Model performance comparison" loading="lazy"/>
+        <div class="img-caption">
+          <strong>Model Performance.</strong> Accuracy and AUROC
+          across backbone architectures and feature strategies.
+        </div>
+      </div>
+    </div>
+
+    <table class="eff-table">
+      <thead>
+        <tr>
+          <th>Architecture</th>
+          <th>Parameters</th>
+          <th>Latency / image</th>
+          <th>VRAM</th>
+          <th>Notes</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="ours">
+          <td>EfficientNet-B0 + ChaosFEX</td>
+          <td class="w">4.0 M</td>
+          <td class="w">1.94 ms</td>
+          <td class="w">112 MB</td>
+          <td>Chaos enrichment — 0 added params</td>
+        </tr>
+        <tr>
+          <td>EfficientNet-B3</td>
+          <td>10.7 M</td>
+          <td>6.68 ms</td>
+          <td>292 MB</td>
+          <td>Larger backbone, diminishing returns</td>
+        </tr>
+        <tr>
+          <td>ViT-B/16</td>
+          <td>85.8 M</td>
+          <td>16.85 ms</td>
+          <td>400 MB</td>
+          <td>Needs 100K+ pretraining; overkill for 3.2K dataset</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ── PUBLICATION ─────────────────────────────────────────── -->
+<section class="section pub-section" id="publication">
+  <div class="section-inner">
+    <p class="section-label gold">Research Output</p>
+    <h2 class="section-head">Accepted · Awarded · In Press</h2>
+    <p class="section-sub">
+      Peer-reviewed, presented, and recognized at the 4th IEEE ICKECS 2026.
+      Accepted for publication — paper in press.
+    </p>
+    <div class="pub-card">
+      <div class="award-badge">
+        <span class="award-icon">🏆</span>
+        <span class="award-label">Best Paper</span>
+      </div>
+      <div class="pub-body">
+        <div class="pub-venue">ICKECS 2026 · 4th IEEE International Conference on Knowledge Engineering and Communication Systems</div>
+        <h3 class="pub-title">ChaosRetina: Chaos-Based Feature Extraction for Multi-Label Retinal Disease Classification</h3>
+        <p class="pub-desc">
+          Presented at ICKECS 2026. Received the <strong>Best Paper Award</strong>.
+          Accepted for publication in the IEEE proceedings — paper currently in press.
+          Research conducted under the guidance of <strong>Dr. Sindhu P Menon</strong>,
+          School of Computing and Information Technology.
+        </p>
+        <pre class="pub-cite">@inproceedings{chaosretina2026,
+  title     = {ChaosRetina: Chaos-Based Feature Extraction for
+               Multi-Label Retinal Disease Classification},
+  booktitle = {4th IEEE International Conference on Knowledge Engineering
+               and Communication Systems (ICKECS)},
+  year      = {2026},
+  month     = {April}
+}</pre>
+        <div class="pub-tags">
+          <span class="pub-tag ieee">IEEE Conference</span>
+          <span class="pub-tag award">🏆 Best Paper Award</span>
+          <span class="pub-tag press">In Press</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── DEVELOPER ───────────────────────────────────────────── -->
+<section class="dev-section" id="developer">
+  <div class="dev-inner">
+    <div class="dev-avatar">S</div>
+    <div class="dev-body">
+      <h2 class="dev-name">Subash S</h2>
+      <p class="dev-role">Researcher · Developer · Author</p>
+      <p class="dev-inst">School of Computing and Information Technology · Guided by Dr. Sindhu P Menon</p>
+      <p class="dev-desc">
+        Built ChaosRetina end-to-end — from data preprocessing and augmentation through
+        model architecture, training dynamics, evaluation, and interpretability. The project
+        bridges chaos theory and clinical ophthalmology: using Generalized Luroth Series
+        dynamics to solve a real medical imaging problem. Presented at ICKECS 2026 and
+        recognized with the Best Paper Award.
+      </p>
+      <div class="dev-links">
+        <a class="dev-link gh" href="https://github.com/subash120305" target="_blank" rel="noopener">
+          ⌥ GitHub Profile
+        </a>
+        <a class="dev-link rp" href="https://github.com/subash120305/chaosretina" target="_blank" rel="noopener">
+          ↗ ChaosRetina Repo
+        </a>
+        <a class="dev-link li" href="https://www.linkedin.com/in/subash120305" target="_blank" rel="noopener">
+          in LinkedIn
+        </a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── FOOTER ─────────────────────────────────────────────── -->
+<footer class="footer">
+  <span>ChaosRetina &nbsp;·&nbsp; ICKECS 2026 &nbsp;·&nbsp; Best Paper Award &nbsp;·&nbsp; IEEE</span>
+  <span>
+    <a href="https://github.com/subash120305/chaosretina" target="_blank" rel="noopener">GitHub</a>
+    &nbsp;·&nbsp;
+    <a href="https://github.com/subash120305" target="_blank" rel="noopener">@subash120305</a>
+  </span>
+</footer>
+
+</body>
+</html>
